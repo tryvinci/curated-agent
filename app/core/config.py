@@ -5,6 +5,8 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    """Application settings - simplified for barebones setup"""
+    
     # Application settings
     debug: bool = False
     log_level: str = "INFO"
@@ -18,25 +20,6 @@ class Settings(BaseSettings):
     # Celery settings
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str = "redis://localhost:6379/0"
-    
-    # Anthropic settings
-    anthropic_api_key: Optional[str] = None
-    
-    # MCP settings
-    mcp_enabled: bool = True
-    mcp_media_server_url: Optional[str] = None
-    mcp_image_server_url: Optional[str] = None
-    mcp_tts_server_url: Optional[str] = None
-    mcp_video_server_url: Optional[str] = None
-    
-    # LlamaIndex settings
-    llama_index_enabled: bool = True
-    llama_index_storage_dir: str = "./data/index_storage"
-    
-    # HoneyHive settings
-    honeyhive_enabled: bool = True
-    honeyhive_api_key: Optional[str] = None
-    honeyhive_project_id: Optional[str] = None
     
     class Config:
         env_file = ".env"

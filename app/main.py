@@ -6,48 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.api.health import router as health_router
-
-# Try to import workflow router, but handle missing dependencies gracefully
-try:
-    from app.api.workflow import router as workflow_router
-    WORKFLOW_AVAILABLE = True
-except ImportError as e:
-    logging.warning(f"Workflow router not available due to missing dependencies: {e}")
-    workflow_router = None
-    WORKFLOW_AVAILABLE = False
-
-# Import new MCP and document processing routers
-try:
-    from app.api.mcp_tools import router as mcp_router
-    MCP_AVAILABLE = True
-except ImportError as e:
-    logging.warning(f"MCP tools router not available due to missing dependencies: {e}")
-    mcp_router = None
-    MCP_AVAILABLE = False
-
-try:
-    from app.api.documents import router as documents_router
-    DOCUMENTS_AVAILABLE = True
-except ImportError as e:
-    logging.warning(f"Documents router not available due to missing dependencies: {e}")
-    documents_router = None
-    DOCUMENTS_AVAILABLE = False
-
-try:
-    from app.api.observability import router as observability_router
-    OBSERVABILITY_AVAILABLE = True
-except ImportError as e:
-    logging.warning(f"Observability router not available due to missing dependencies: {e}")
-    observability_router = None
-    OBSERVABILITY_AVAILABLE = False
-
-try:
-    from app.api.agent_mcp import router as agent_mcp_router
-    AGENT_MCP_AVAILABLE = True
-except ImportError as e:
-    logging.warning(f"Agent MCP router not available due to missing dependencies: {e}")
-    agent_mcp_router = None
-    AGENT_MCP_AVAILABLE = False
+from app.api.workflow import router as workflow_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -69,7 +28,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application
 app = FastAPI(
     title="Curated Agent API",
-    description="A FastAPI application with Redis, Celery, CrewAI, MCP tools, LlamaIndex, and HoneyHive for creative workflow automation, document processing, and AI observability. Includes agent-specific MCP tools at /agent/mcp endpoint.",
+    description="A barebones FastAPI application with Redis and Celery for job processing. Celery workers call external APIs and return their output.",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -85,53 +44,24 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health_router)
-if WORKFLOW_AVAILABLE:
-    app.include_router(workflow_router)
-if MCP_AVAILABLE:
-    app.include_router(mcp_router)
-if DOCUMENTS_AVAILABLE:
-    app.include_router(documents_router)
-if OBSERVABILITY_AVAILABLE:
-    app.include_router(observability_router)
-if AGENT_MCP_AVAILABLE:
-    app.include_router(agent_mcp_router)
+app.include_router(workflow_router)
 
 
 # Root endpoint
 @app.get("/")
 async def root():
     """Get basic API information and available endpoints"""
-    endpoints = {
-        "message": "Curated Agent API",
+    return {
+        "message": "Curated Agent API - Barebones FastAPI + Redis + Celery",
         "version": "1.0.0",
         "docs": "/docs",
         "health": "/health",
-        "available_endpoints": []
+        "available_endpoints": [
+            "POST /api/v1/workflow/submit - Submit job for processing",
+            "GET /api/v1/workflow/status/{job_id} - Get job status",
+            "GET /api/v1/workflow/jobs - List recent jobs"
+        ]
     }
-    
-    if WORKFLOW_AVAILABLE:
-        endpoints["available_endpoints"].append("POST /api/v1/workflow/submit - Submit creative workflow")
-        endpoints["available_endpoints"].append("GET /api/v1/workflow/status/{job_id} - Get job status")
-    
-    if MCP_AVAILABLE:
-        endpoints["available_endpoints"].append("GET /api/v1/mcp/tools - List MCP tools")
-        endpoints["available_endpoints"].append("POST /api/v1/mcp/tools/execute - Execute MCP tool")
-    
-    if AGENT_MCP_AVAILABLE:
-        endpoints["available_endpoints"].append("GET /agent/mcp/tools - List agent MCP tools")
-        endpoints["available_endpoints"].append("POST /agent/mcp/tools/execute - Execute agent MCP tool")
-        endpoints["available_endpoints"].append("GET /agent/mcp/capabilities - Get agent capabilities")
-    
-    if DOCUMENTS_AVAILABLE:
-        endpoints["available_endpoints"].append("POST /api/v1/documents/ingest/text - Ingest documents")
-        endpoints["available_endpoints"].append("POST /api/v1/documents/search - Search documents")
-        endpoints["available_endpoints"].append("POST /api/v1/documents/generate-media - Generate media")
-    
-    if OBSERVABILITY_AVAILABLE:
-        endpoints["available_endpoints"].append("GET /api/v1/observability/health - Observability health")
-        endpoints["available_endpoints"].append("POST /api/v1/observability/feedback - Submit feedback")
-    
-    return endpoints
 
 
 if __name__ == "__main__":

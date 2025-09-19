@@ -1,30 +1,48 @@
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
-from app.models.schemas import (
-    CreativeWorkflowRequest,
-    CreativeWorkflowResponse,
-    JobSubmissionResponse,
-    JobStatus
-)
+from app.models.schemas import JobSubmissionResponse, JobStatus
 from app.services.redis_service import get_redis_client
-from app.tasks.creative_workflow import process_creative_workflow
+from app.tasks.api_caller import call_external_api
 
-router = APIRouter(prefix="/api/v1/workflow", tags=["Creative Workflow"])
+router = APIRouter(prefix="/api/v1/workflow", tags=["API Workflow"])
+
+
+class APICallRequest(BaseModel):
+    """Request model for API call jobs"""
+    api_url: str
+    method: str = "POST"
+    headers: Optional[Dict[str, str]] = None
+    payload: Optional[Dict[str, Any]] = None
+    timeout: int = 30
+    priority: int = 1
+
+
+class JobResponse(BaseModel):
+    """Response model for job status"""
+    job_id: str
+    status: str
+    api_url: Optional[str] = None
+    method: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
+    created_at: str
+    updated_at: str
 
 
 @router.post("/submit", response_model=JobSubmissionResponse)
-async def submit_creative_workflow(
-    request: CreativeWorkflowRequest,
+async def submit_api_call_job(
+    request: APICallRequest,
     background_tasks: BackgroundTasks
 ) -> JobSubmissionResponse:
     """
-    Submit a creative workflow job for processing
+    Submit an API call job for processing
     
     This endpoint:
     1. Validates the request
@@ -40,9 +58,11 @@ async def submit_creative_workflow(
         job_data = {
             "job_id": job_id,
             "status": JobStatus.PENDING.value,
-            "task_description": request.task_description,
-            "project_context": request.project_context,
-            "requirements": request.requirements,
+            "api_url": request.api_url,
+            "method": request.method,
+            "headers": request.headers,
+            "payload": request.payload,
+            "timeout": request.timeout,
             "priority": request.priority,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
@@ -57,17 +77,19 @@ async def submit_creative_workflow(
         )
         
         # Queue the job for processing
-        process_creative_workflow.delay(
+        call_external_api.delay(
             job_id=job_id,
-            task_description=request.task_description,
-            project_context=request.project_context,
-            requirements=request.requirements
+            api_url=request.api_url,
+            method=request.method,
+            headers=request.headers,
+            payload=request.payload,
+            timeout=request.timeout
         )
         
         return JobSubmissionResponse(
             job_id=job_id,
             status=JobStatus.PENDING,
-            message=f"Creative workflow job {job_id} submitted successfully"
+            message=f"API call job {job_id} submitted successfully"
         )
         
     except Exception as e:
@@ -77,10 +99,10 @@ async def submit_creative_workflow(
         )
 
 
-@router.get("/status/{job_id}", response_model=CreativeWorkflowResponse)
-async def get_job_status(job_id: str) -> CreativeWorkflowResponse:
+@router.get("/status/{job_id}", response_model=JobResponse)
+async def get_job_status(job_id: str) -> JobResponse:
     """
-    Get the status and results of a creative workflow job
+    Get the status and results of an API call job
     """
     try:
         redis_client = get_redis_client()
@@ -94,13 +116,15 @@ async def get_job_status(job_id: str) -> CreativeWorkflowResponse:
         
         job_info = json.loads(job_data)
         
-        return CreativeWorkflowResponse(
+        return JobResponse(
             job_id=job_info["job_id"],
-            status=JobStatus(job_info["status"]),
+            status=job_info["status"],
+            api_url=job_info.get("api_url"),
+            method=job_info.get("method"),
             result=job_info.get("result"),
             error_message=job_info.get("error_message"),
-            created_at=datetime.fromisoformat(job_info["created_at"]),
-            updated_at=datetime.fromisoformat(job_info["updated_at"])
+            created_at=job_info["created_at"],
+            updated_at=job_info["updated_at"]
         )
         
     except HTTPException:
@@ -113,7 +137,7 @@ async def get_job_status(job_id: str) -> CreativeWorkflowResponse:
 
 
 @router.get("/jobs")
-async def list_jobs(limit: int = 10, status: Optional[JobStatus] = None) -> JSONResponse:
+async def list_jobs(limit: int = 10, status: Optional[str] = None) -> JSONResponse:
     """
     List recent jobs with optional status filtering
     """
@@ -130,11 +154,12 @@ async def list_jobs(limit: int = 10, status: Optional[JobStatus] = None) -> JSON
                 job_info = json.loads(job_data)
                 
                 # Filter by status if provided
-                if status is None or job_info["status"] == status.value:
+                if status is None or job_info["status"] == status:
                     jobs.append({
                         "job_id": job_info["job_id"],
                         "status": job_info["status"],
-                        "task_description": job_info["task_description"][:100] + "..." if len(job_info["task_description"]) > 100 else job_info["task_description"],
+                        "api_url": job_info.get("api_url", "N/A"),
+                        "method": job_info.get("method", "N/A"),
                         "created_at": job_info["created_at"],
                         "updated_at": job_info["updated_at"]
                     })

@@ -8,7 +8,7 @@ celery_app = Celery(
     "curated-agent",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.tasks.creative_workflow"]
+    include=["app.tasks.api_caller"]
 )
 
 # Configure Celery
