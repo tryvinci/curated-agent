@@ -1,0 +1,13 @@
+# FastAPI and web dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Redis and Celery
+redis==5.0.1
+celery[redis]==5.3.4
+
+# Additional utilities
+python-dotenv==1.0.0
+httpx==0.25.2
