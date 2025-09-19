@@ -5,7 +5,7 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 
 # Redis and Celery
-redis==5.0.1
+redis==4.6.0
 celery[redis]==5.3.4
 
 # Additional utilities
