@@ -91,10 +91,8 @@ docker-compose up -d
 curl -X POST "http://localhost:8000/api/v1/workflow/submit" \
   -H "Content-Type: application/json" \
   -d '{
-    "api_url": "https://httpbin.org/post",
-    "method": "POST",
-    "payload": {"message": "Hello World"},
-    "timeout": 30
+    "brand": "TechCorp",
+    "customer_requirements": "Need a modern logo design for a tech startup"
   }'
 ```
 
@@ -114,16 +112,8 @@ When submitting a job, use the following schema:
 
 ```json
 {
-  "api_url": "https://api.example.com/endpoint",
-  "method": "POST",
-  "headers": {
-    "Authorization": "Bearer token",
-    "Content-Type": "application/json"
-  },
-  "payload": {
-    "key": "value"
-  },
-  "timeout": 30
+  "brand": "TechCorp",
+  "customer_requirements": "Need a modern logo design for a tech startup"
 }
 ```
 
@@ -135,8 +125,8 @@ Job status response:
 {
   "job_id": "uuid",
   "status": "completed|processing|pending|failed",
-  "api_url": "https://api.example.com/endpoint",
-  "method": "POST",
+  "brand": "TechCorp",
+  "customer_requirements": "Need a modern logo design for a tech startup",
   "result": {
     "success": true,
     "status_code": 200,
@@ -159,6 +149,7 @@ Environment variables:
 - `REDIS_DB`: Redis database (default: 0)
 - `CELERY_BROKER_URL`: Celery broker URL
 - `CELERY_RESULT_BACKEND`: Celery result backend URL
+- `DOWNSTREAM_API_URL`: URL of the downstream API to call (default: https://api.example.com/process)
 
 ## Development
 
