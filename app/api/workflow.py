@@ -16,20 +16,16 @@ router = APIRouter(prefix="/api/v1/workflow", tags=["API Workflow"])
 
 class APICallRequest(BaseModel):
     """Request model for API call jobs"""
-    api_url: str
-    method: str = "POST"
-    headers: Optional[Dict[str, str]] = None
-    payload: Optional[Dict[str, Any]] = None
-    timeout: int = 30
-    priority: int = 1
+    brand: str
+    customer_requirements: str
 
 
 class JobResponse(BaseModel):
     """Response model for job status"""
     job_id: str
     status: str
-    api_url: Optional[str] = None
-    method: Optional[str] = None
+    brand: Optional[str] = None
+    customer_requirements: Optional[str] = None
     result: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
     created_at: str
@@ -54,16 +50,12 @@ async def submit_api_call_job(
         # Generate unique job ID
         job_id = str(uuid.uuid4())
         
-        # Prepare job data
+        # Prepare job data (no longer includes api_url)
         job_data = {
             "job_id": job_id,
             "status": JobStatus.PENDING.value,
-            "api_url": request.api_url,
-            "method": request.method,
-            "headers": request.headers,
-            "payload": request.payload,
-            "timeout": request.timeout,
-            "priority": request.priority,
+            "brand": request.brand,
+            "customer_requirements": request.customer_requirements,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
@@ -76,14 +68,11 @@ async def submit_api_call_job(
             json.dumps(job_data)
         )
         
-        # Queue the job for processing
+        # Queue the job for processing (no longer passes api_url)
         call_external_api.delay(
             job_id=job_id,
-            api_url=request.api_url,
-            method=request.method,
-            headers=request.headers,
-            payload=request.payload,
-            timeout=request.timeout
+            brand=request.brand,
+            customer_requirements=request.customer_requirements
         )
         
         return JobSubmissionResponse(
@@ -119,8 +108,8 @@ async def get_job_status(job_id: str) -> JobResponse:
         return JobResponse(
             job_id=job_info["job_id"],
             status=job_info["status"],
-            api_url=job_info.get("api_url"),
-            method=job_info.get("method"),
+            brand=job_info.get("brand"),
+            customer_requirements=job_info.get("customer_requirements"),
             result=job_info.get("result"),
             error_message=job_info.get("error_message"),
             created_at=job_info["created_at"],
@@ -158,8 +147,8 @@ async def list_jobs(limit: int = 10, status: Optional[str] = None) -> JSONRespon
                     jobs.append({
                         "job_id": job_info["job_id"],
                         "status": job_info["status"],
-                        "api_url": job_info.get("api_url", "N/A"),
-                        "method": job_info.get("method", "N/A"),
+                        "brand": job_info.get("brand", "N/A"),
+                        "customer_requirements": job_info.get("customer_requirements", "N/A"),
                         "created_at": job_info["created_at"],
                         "updated_at": job_info["updated_at"]
                     })

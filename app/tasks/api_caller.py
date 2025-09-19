@@ -7,6 +7,7 @@ import httpx
 from app.celery_app import celery_app
 from app.services.redis_service import get_redis_client
 from app.models.schemas import JobStatus
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -15,32 +16,36 @@ logger = logging.getLogger(__name__)
 def call_external_api(
     self,
     job_id: str,
-    api_url: str,
-    method: str = "POST",
-    headers: Optional[Dict[str, str]] = None,
-    payload: Optional[Dict[str, Any]] = None,
-    timeout: int = 30
+    brand: str,
+    customer_requirements: str
 ):
     """
-    Celery task that calls an external API and returns its output
+    Celery task that calls the downstream API with brand and customer requirements
     
     Args:
         job_id: Unique identifier for the job
-        api_url: URL of the external API to call
-        method: HTTP method (GET, POST, PUT, etc.)
-        headers: Optional HTTP headers
-        payload: Optional JSON payload for the request
-        timeout: Request timeout in seconds
+        brand: Brand name for the API call
+        customer_requirements: Customer requirements for the API call
     """
     redis_client = get_redis_client()
+    settings = get_settings()
     
     try:
+        # Get API URL from environment variable
+        api_url = settings.downstream_api_url
+        
+        # Prepare the payload for the downstream API
+        payload = {
+            "brand": brand,
+            "customer_requirements": customer_requirements
+        }
+        
         # Update job status to processing
         job_data = {
             "job_id": job_id,
             "status": JobStatus.PROCESSING.value,
-            "api_url": api_url,
-            "method": method,
+            "brand": brand,
+            "customer_requirements": customer_requirements,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
@@ -50,20 +55,14 @@ def call_external_api(
             json.dumps(job_data)
         )
         
-        logger.info(f"Starting API call for job {job_id}: {method} {api_url}")
+        logger.info(f"Starting API call for job {job_id}: POST {api_url}")
         
-        # Make the API call
+        # Make the API call (always POST with the brand/requirements payload)
+        headers = {"Content-Type": "application/json"}
+        timeout = 30  # Default timeout
+        
         with httpx.Client(timeout=timeout) as client:
-            if method.upper() == "GET":
-                response = client.get(api_url, headers=headers or {})
-            elif method.upper() == "POST":
-                response = client.post(api_url, headers=headers or {}, json=payload)
-            elif method.upper() == "PUT":
-                response = client.put(api_url, headers=headers or {}, json=payload)
-            elif method.upper() == "DELETE":
-                response = client.delete(api_url, headers=headers or {})
-            else:
-                raise ValueError(f"Unsupported HTTP method: {method}")
+            response = client.post(api_url, headers=headers, json=payload)
         
         # Process the response
         result = {
