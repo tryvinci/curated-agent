@@ -16,6 +16,23 @@ except ImportError as e:
     workflow_router = None
     WORKFLOW_AVAILABLE = False
 
+# Import new MCP and document processing routers
+try:
+    from app.api.mcp_tools import router as mcp_router
+    MCP_AVAILABLE = True
+except ImportError as e:
+    logging.warning(f"MCP tools router not available due to missing dependencies: {e}")
+    mcp_router = None
+    MCP_AVAILABLE = False
+
+try:
+    from app.api.documents import router as documents_router
+    DOCUMENTS_AVAILABLE = True
+except ImportError as e:
+    logging.warning(f"Documents router not available due to missing dependencies: {e}")
+    documents_router = None
+    DOCUMENTS_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,7 +53,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application
 app = FastAPI(
     title="Curated Agent API",
-    description="A FastAPI application with Redis, Celery, and CrewAI for creative workflow automation",
+    description="A FastAPI application with Redis, Celery, CrewAI, MCP tools, and LlamaIndex for creative workflow automation and document processing",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -54,6 +71,10 @@ app.add_middleware(
 app.include_router(health_router)
 if WORKFLOW_AVAILABLE:
     app.include_router(workflow_router)
+if MCP_AVAILABLE:
+    app.include_router(mcp_router)
+if DOCUMENTS_AVAILABLE:
+    app.include_router(documents_router)
 
 
 if __name__ == "__main__":

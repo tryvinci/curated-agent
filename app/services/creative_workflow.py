@@ -6,6 +6,19 @@ import logging
 
 from app.core.config import get_settings
 
+# Import new services with graceful handling
+try:
+    from app.services.mcp_integration import get_mcp_integration
+    MCP_AVAILABLE = True
+except ImportError:
+    MCP_AVAILABLE = False
+
+try:
+    from app.services.llama_index_service import get_llama_index_service
+    LLAMA_INDEX_AVAILABLE = True
+except ImportError:
+    LLAMA_INDEX_AVAILABLE = False
+
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
@@ -23,40 +36,113 @@ class CreativeWorkflowService:
             anthropic_api_key=settings.anthropic_api_key,
             temperature=0.7
         )
-    
-    def create_creative_agents(self) -> Dict[str, Agent]:
-        """Create specialized agents for creative workflow"""
         
-        # Creative Director Agent
+        # Initialize MCP and LlamaIndex services if available
+        self.mcp_service = get_mcp_integration() if MCP_AVAILABLE else None
+        self.llama_index_service = get_llama_index_service() if LLAMA_INDEX_AVAILABLE else None
+        
+        # Set up enhanced tools
+        self._setup_enhanced_tools()
+    
+    def _setup_enhanced_tools(self):
+        """Set up enhanced tools using MCP and LlamaIndex"""
+        
+        @tool("search_knowledge_base")
+        def search_knowledge_base(query: str) -> str:
+            """Search the document knowledge base for relevant information"""
+            if not self.llama_index_service:
+                return "Document search not available - LlamaIndex not installed"
+            
+            try:
+                result = self.llama_index_service.search_documents(query, top_k=3)
+                if result.success and result.results:
+                    search_results = []
+                    for r in result.results:
+                        search_results.append(f"• {r.get('text', 'No text')[:200]}...")
+                    return f"Knowledge base search results for '{query}':\n" + "\n".join(search_results)
+                else:
+                    return f"No relevant information found for: {query}"
+            except Exception as e:
+                return f"Search error: {str(e)}"
+        
+        @tool("execute_mcp_tool")
+        def execute_mcp_tool(tool_name: str, **kwargs) -> str:
+            """Execute an MCP tool with given parameters"""
+            if not self.mcp_service:
+                return "MCP tools not available - MCP not installed"
+            
+            try:
+                # This would be async in real implementation, but for simplicity...
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                result = loop.run_until_complete(
+                    self.mcp_service.execute_tool(tool_name, **kwargs)
+                )
+                loop.close()
+                
+                if result.success:
+                    return f"Tool '{tool_name}' executed successfully: {result.result}"
+                else:
+                    return f"Tool '{tool_name}' failed: {result.error}"
+            except Exception as e:
+                return f"MCP tool execution error: {str(e)}"
+        
+        @tool("get_available_tools")
+        def get_available_tools() -> str:
+            """Get list of available MCP tools"""
+            if not self.mcp_service:
+                return "MCP tools not available"
+            
+            try:
+                tools = self.mcp_service.get_available_tools()
+                return f"Available MCP tools: {', '.join(tools)}"
+            except Exception as e:
+                return f"Error getting tools: {str(e)}"
+        
+        # Store tools for use by agents
+        self.enhanced_tools = [search_knowledge_base, execute_mcp_tool, get_available_tools]
+        
+    def create_creative_agents(self) -> Dict[str, Agent]:
+        """Create specialized agents for creative workflow with enhanced tools"""
+        """Create specialized agents for creative workflow with enhanced tools"""
+        
+        # Creative Director Agent with enhanced capabilities
         creative_director = Agent(
             role="Creative Director",
-            goal="Oversee and guide the creative process with strategic vision",
+            goal="Oversee and guide the creative process with strategic vision, leveraging available tools and knowledge",
             backstory="You are an experienced creative director who understands "
                      "brand strategy, creative vision, and can guide teams to "
-                     "produce exceptional creative work.",
+                     "produce exceptional creative work. You have access to tools "
+                     "for research and content generation.",
             llm=self.llm,
+            tools=self.enhanced_tools if hasattr(self, 'enhanced_tools') else [],
             verbose=True
         )
         
-        # Content Creator Agent
+        # Content Creator Agent with tool access
         content_creator = Agent(
             role="Content Creator",
-            goal="Generate engaging and original creative content",
+            goal="Generate engaging and original creative content using available research and tools",
             backstory="You are a talented content creator with expertise in "
                      "writing, storytelling, and creating compelling narratives "
-                     "across various formats and platforms.",
+                     "across various formats and platforms. You can search knowledge "
+                     "bases and use specialized tools to enhance your content.",
             llm=self.llm,
+            tools=self.enhanced_tools if hasattr(self, 'enhanced_tools') else [],
             verbose=True
         )
         
         # Quality Reviewer Agent
         quality_reviewer = Agent(
             role="Quality Reviewer",
-            goal="Review and refine creative outputs for excellence",
+            goal="Review and refine creative outputs for excellence, ensuring accuracy with fact-checking",
             backstory="You are a meticulous quality reviewer who ensures "
                      "all creative work meets high standards of quality, "
-                     "consistency, and effectiveness.",
+                     "consistency, and effectiveness. You can verify information "
+                     "using available knowledge sources.",
             llm=self.llm,
+            tools=self.enhanced_tools if hasattr(self, 'enhanced_tools') else [],
             verbose=True
         )
         
@@ -93,6 +179,9 @@ class CreativeWorkflowService:
             3. Key messaging and tone
             4. Creative direction and approach
             5. Success metrics
+            
+            Use the search_knowledge_base tool to research relevant information
+            and get_available_tools to see what other capabilities are available.
             """,
             agent=agents["creative_director"],
             expected_output="A detailed creative brief and strategy document"
@@ -112,6 +201,9 @@ class CreativeWorkflowService:
             2. Is engaging and original
             3. Meets all specified requirements
             4. Is appropriate for the target audience
+            
+            Use search_knowledge_base to find relevant background information
+            and execute_mcp_tool if needed for content generation assistance.
             """,
             agent=agents["content_creator"],
             expected_output="High-quality creative content ready for review"
@@ -128,6 +220,7 @@ class CreativeWorkflowService:
             2. Alignment with creative brief
             3. Grammar, style, and consistency
             4. Overall impact and engagement potential
+            5. Factual accuracy (use search_knowledge_base to verify claims)
             
             Provide final polished version with improvement suggestions.
             """,

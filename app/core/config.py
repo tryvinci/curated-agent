@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     # Anthropic settings
     anthropic_api_key: Optional[str] = None
     
+    # MCP settings
+    mcp_enabled: bool = True
+    
+    # LlamaIndex settings
+    llama_index_enabled: bool = True
+    llama_index_storage_dir: str = "./data/index_storage"
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
