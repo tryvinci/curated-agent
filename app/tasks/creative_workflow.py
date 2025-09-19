@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from app.celery_app import celery_app
@@ -38,7 +38,7 @@ def process_creative_workflow(
             "task_description": task_description,
             "project_context": project_context,
             "requirements": requirements,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
         redis_client.setex(
@@ -62,14 +62,14 @@ def process_creative_workflow(
             job_data.update({
                 "status": JobStatus.COMPLETED.value,
                 "result": result,
-                "updated_at": datetime.utcnow().isoformat()
+                "updated_at": datetime.now(timezone.utc).isoformat()
             })
             logger.info(f"Creative workflow completed successfully for job {job_id}")
         else:
             job_data.update({
                 "status": JobStatus.FAILED.value,
                 "error_message": result.get("error", "Unknown error occurred"),
-                "updated_at": datetime.utcnow().isoformat()
+                "updated_at": datetime.now(timezone.utc).isoformat()
             })
             logger.error(f"Creative workflow failed for job {job_id}: {result.get('error')}")
         
@@ -91,7 +91,7 @@ def process_creative_workflow(
             "job_id": job_id,
             "status": JobStatus.FAILED.value,
             "error_message": error_msg,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
         try:

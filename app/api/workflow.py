@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
@@ -44,8 +44,8 @@ async def submit_creative_workflow(
             "project_context": request.project_context,
             "requirements": request.requirements,
             "priority": request.priority,
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
         # Store job data in Redis

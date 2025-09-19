@@ -1,8 +1,15 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from app.models.schemas import HealthCheckResponse
 from app.services.redis_service import check_redis_connection
-from app.celery_app import celery_app
+
+# Try to import celery but handle gracefully if not available
+try:
+    from app.celery_app import celery_app
+    CELERY_AVAILABLE = True
+except ImportError:
+    celery_app = None
+    CELERY_AVAILABLE = False
 
 router = APIRouter(tags=["Health"])
 
@@ -18,13 +25,14 @@ async def health_check() -> HealthCheckResponse:
         
         # Check Celery worker status
         celery_active = False
-        try:
-            # Check if any workers are active
-            inspect = celery_app.control.inspect()
-            stats = inspect.stats()
-            celery_active = bool(stats and len(stats) > 0)
-        except Exception:
-            celery_active = False
+        if CELERY_AVAILABLE:
+            try:
+                # Check if any workers are active
+                inspect = celery_app.control.inspect()
+                stats = inspect.stats()
+                celery_active = bool(stats and len(stats) > 0)
+            except Exception:
+                celery_active = False
         
         # Determine overall status
         status = "healthy" if redis_connected and celery_active else "degraded"
@@ -35,7 +43,7 @@ async def health_check() -> HealthCheckResponse:
             status=status,
             redis_connected=redis_connected,
             celery_active=celery_active,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
         
     except Exception as e:

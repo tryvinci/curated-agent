@@ -6,7 +6,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.api.health import router as health_router
-from app.api.workflow import router as workflow_router
+
+# Try to import workflow router, but handle missing dependencies gracefully
+try:
+    from app.api.workflow import router as workflow_router
+    WORKFLOW_AVAILABLE = True
+except ImportError as e:
+    logging.warning(f"Workflow router not available due to missing dependencies: {e}")
+    workflow_router = None
+    WORKFLOW_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -44,7 +52,8 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health_router)
-app.include_router(workflow_router)
+if WORKFLOW_AVAILABLE:
+    app.include_router(workflow_router)
 
 
 if __name__ == "__main__":
