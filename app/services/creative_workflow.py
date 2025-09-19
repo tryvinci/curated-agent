@@ -19,6 +19,12 @@ try:
 except ImportError:
     LLAMA_INDEX_AVAILABLE = False
 
+try:
+    from app.services.external_mcp_client import get_external_mcp_client
+    EXTERNAL_MCP_AVAILABLE = True
+except ImportError:
+    EXTERNAL_MCP_AVAILABLE = False
+
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
@@ -40,6 +46,7 @@ class CreativeWorkflowService:
         # Initialize MCP and LlamaIndex services if available
         self.mcp_service = get_mcp_integration() if MCP_AVAILABLE else None
         self.llama_index_service = get_llama_index_service() if LLAMA_INDEX_AVAILABLE else None
+        self.external_mcp_client = None
         
         # Set up enhanced tools
         self._setup_enhanced_tools()
@@ -88,20 +95,89 @@ class CreativeWorkflowService:
             except Exception as e:
                 return f"MCP tool execution error: {str(e)}"
         
-        @tool("get_available_tools")
-        def get_available_tools() -> str:
-            """Get list of available MCP tools"""
-            if not self.mcp_service:
-                return "MCP tools not available"
+        @tool("generate_image")
+        def generate_image(prompt: str, style: str = None) -> str:
+            """Generate an image using external MCP server"""
+            if not EXTERNAL_MCP_AVAILABLE:
+                return "External MCP services not available"
             
             try:
-                tools = self.mcp_service.get_available_tools()
-                return f"Available MCP tools: {', '.join(tools)}"
+                import asyncio
+                if self.external_mcp_client is None:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    self.external_mcp_client = loop.run_until_complete(get_external_mcp_client())
+                
+                loop = asyncio.get_event_loop()
+                result = loop.run_until_complete(
+                    self.external_mcp_client.generate_image(prompt, style)
+                )
+                
+                if result.success:
+                    return f"Image generated successfully: {result.result}"
+                else:
+                    return f"Image generation failed: {result.error}"
             except Exception as e:
-                return f"Error getting tools: {str(e)}"
+                return f"Error generating image: {str(e)}"
+        
+        @tool("generate_tts")
+        def generate_tts(text: str, voice: str = None) -> str:
+            """Generate text-to-speech using external MCP server"""
+            if not EXTERNAL_MCP_AVAILABLE:
+                return "External MCP services not available"
+            
+            try:
+                import asyncio
+                if self.external_mcp_client is None:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    self.external_mcp_client = loop.run_until_complete(get_external_mcp_client())
+                
+                loop = asyncio.get_event_loop()
+                result = loop.run_until_complete(
+                    self.external_mcp_client.generate_tts(text, voice)
+                )
+                
+                if result.success:
+                    return f"TTS generated successfully: {result.result}"
+                else:
+                    return f"TTS generation failed: {result.error}"
+            except Exception as e:
+                return f"Error generating TTS: {str(e)}"
+        
+        @tool("generate_video") 
+        def generate_video(prompt: str, duration: int = 30, style: str = None) -> str:
+            """Generate a video using external MCP server"""
+            if not EXTERNAL_MCP_AVAILABLE:
+                return "External MCP services not available"
+            
+            try:
+                import asyncio
+                if self.external_mcp_client is None:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    self.external_mcp_client = loop.run_until_complete(get_external_mcp_client())
+                
+                loop = asyncio.get_event_loop()
+                result = loop.run_until_complete(
+                    self.external_mcp_client.generate_video(prompt, duration, style)
+                )
+                
+                if result.success:
+                    return f"Video generated successfully: {result.result}"
+                else:
+                    return f"Video generation failed: {result.error}"
+            except Exception as e:
+                return f"Error generating video: {str(e)}"
         
         # Store tools for use by agents
-        self.enhanced_tools = [search_knowledge_base, execute_mcp_tool, get_available_tools]
+        self.enhanced_tools = [
+            search_knowledge_base, 
+            execute_mcp_tool, 
+            generate_image,
+            generate_tts,
+            generate_video
+        ]
         
     def create_creative_agents(self) -> Dict[str, Agent]:
         """Create specialized agents for creative workflow with enhanced tools"""

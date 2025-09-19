@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     
     # MCP settings
     mcp_enabled: bool = True
+    mcp_media_server_url: Optional[str] = None
+    mcp_image_server_url: Optional[str] = None
+    mcp_tts_server_url: Optional[str] = None
+    mcp_video_server_url: Optional[str] = None
     
     # LlamaIndex settings
     llama_index_enabled: bool = True

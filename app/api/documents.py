@@ -8,6 +8,13 @@ from pathlib import Path
 
 from app.services.llama_index_service import get_llama_index_service
 
+# Import external MCP client
+try:
+    from app.services.external_mcp_client import get_external_mcp_client
+    EXTERNAL_MCP_AVAILABLE = True
+except ImportError:
+    EXTERNAL_MCP_AVAILABLE = False
+
 router = APIRouter(prefix="/api/v1/documents", tags=["Document Processing"])
 
 
@@ -29,6 +36,32 @@ class DocumentSearchResponse(BaseModel):
     query: str
     results: List[Dict[str, Any]] = []
     error: Optional[str] = None
+
+
+class AgentQueryRequest(BaseModel):
+    """Request model for agent-based queries with tools"""
+    query: str
+    system_message: Optional[str] = None
+
+
+class AgentQueryResponse(BaseModel):
+    """Response model for agent queries"""
+    success: bool
+    query: str
+    response: Optional[str] = None
+    tools_used: List[Dict[str, Any]] = []
+    error: Optional[str] = None
+
+
+class MediaGenerationRequest(BaseModel):
+    """Request model for media generation via external MCP"""
+    prompt: str
+    media_type: str  # "image", "tts", "video"
+    style: Optional[str] = None
+    size: Optional[str] = None  # for images
+    voice: Optional[str] = None  # for TTS
+    format: Optional[str] = None  # for TTS
+    duration: Optional[int] = None  # for videos
 
 
 @router.post("/ingest/files")
@@ -169,3 +202,121 @@ async def document_health_check():
             "service_available": False,
             "error": str(e)
         })
+
+
+@router.post("/query-with-tools", response_model=AgentQueryResponse)
+async def query_with_tools(request: AgentQueryRequest):
+    """Query documents using LlamaIndex agent with MCP tools"""
+    try:
+        service = get_llama_index_service()
+        result = await service.query_with_tools(request.query, request.system_message)
+        
+        return AgentQueryResponse(
+            success=result.get("success", False),
+            query=result.get("query", request.query),
+            response=result.get("response"),
+            tools_used=result.get("tools_used", []),
+            error=result.get("error")
+        )
+        
+    except Exception as e:
+        return AgentQueryResponse(
+            success=False,
+            query=request.query,
+            error=str(e)
+        )
+
+
+@router.post("/generate-media")
+async def generate_media(request: MediaGenerationRequest):
+    """Generate media (image, TTS, video) using external MCP servers"""
+    if not EXTERNAL_MCP_AVAILABLE:
+        raise HTTPException(
+            status_code=503, 
+            detail="External MCP client not available"
+        )
+    
+    try:
+        client = await get_external_mcp_client()
+        
+        if request.media_type == "image":
+            result = await client.generate_image(
+                prompt=request.prompt,
+                style=request.style,
+                size=request.size or "1024x1024"
+            )
+        elif request.media_type == "tts":
+            result = await client.generate_tts(
+                text=request.prompt,
+                voice=request.voice,
+                format=request.format or "mp3"
+            )
+        elif request.media_type == "video":
+            result = await client.generate_video(
+                prompt=request.prompt,
+                duration=request.duration or 30,
+                style=request.style
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported media type: {request.media_type}"
+            )
+        
+        return JSONResponse(content={
+            "success": result.success,
+            "media_type": request.media_type,
+            "prompt": request.prompt,
+            "result": result.result,
+            "error": result.error,
+            "server_url": result.server_url
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate media: {str(e)}")
+
+
+@router.get("/external-servers")
+async def list_external_servers():
+    """List available external MCP servers and their tools"""
+    if not EXTERNAL_MCP_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="External MCP client not available"
+        )
+    
+    try:
+        client = await get_external_mcp_client()
+        servers = await client.list_external_tools()
+        
+        return JSONResponse(content={
+            "success": True,
+            "servers": servers
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list servers: {str(e)}")
+
+
+@router.get("/mcp-tools")
+async def list_mcp_tools():
+    """List MCP tools available in LlamaIndex integration"""
+    try:
+        service = get_llama_index_service()
+        tools = service.get_mcp_tools()
+        
+        tool_info = []
+        for tool in tools:
+            tool_info.append({
+                "name": tool.metadata.name if hasattr(tool, 'metadata') else str(tool),
+                "description": tool.metadata.description if hasattr(tool, 'metadata') else "No description available"
+            })
+        
+        return JSONResponse(content={
+            "success": True,
+            "tools": tool_info,
+            "count": len(tool_info)
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list MCP tools: {str(e)}")
