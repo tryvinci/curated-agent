@@ -33,6 +33,14 @@ except ImportError as e:
     documents_router = None
     DOCUMENTS_AVAILABLE = False
 
+try:
+    from app.api.observability import router as observability_router
+    OBSERVABILITY_AVAILABLE = True
+except ImportError as e:
+    logging.warning(f"Observability router not available due to missing dependencies: {e}")
+    observability_router = None
+    OBSERVABILITY_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -53,7 +61,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application
 app = FastAPI(
     title="Curated Agent API",
-    description="A FastAPI application with Redis, Celery, CrewAI, MCP tools, and LlamaIndex for creative workflow automation and document processing",
+    description="A FastAPI application with Redis, Celery, CrewAI, MCP tools, LlamaIndex, and HoneyHive for creative workflow automation, document processing, and AI observability",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -75,6 +83,8 @@ if MCP_AVAILABLE:
     app.include_router(mcp_router)
 if DOCUMENTS_AVAILABLE:
     app.include_router(documents_router)
+if OBSERVABILITY_AVAILABLE:
+    app.include_router(observability_router)
 
 
 if __name__ == "__main__":

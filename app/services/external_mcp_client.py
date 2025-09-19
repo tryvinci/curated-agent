@@ -3,7 +3,15 @@ import httpx
 import asyncio
 from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel
+from datetime import datetime, timezone
 from app.core.config import get_settings
+
+# Import HoneyHive service
+try:
+    from app.services.honeyhive_service import get_honeyhive_service
+    HONEYHIVE_AVAILABLE = True
+except ImportError:
+    HONEYHIVE_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -23,6 +31,7 @@ class ExternalMCPClient:
     def __init__(self):
         self.servers: Dict[str, str] = {}
         self.client = httpx.AsyncClient(timeout=30.0)
+        self.honeyhive_service = get_honeyhive_service() if HONEYHIVE_AVAILABLE else None
         self._load_server_config()
     
     def _load_server_config(self):
@@ -50,12 +59,32 @@ class ExternalMCPClient:
         tool_name: str, 
         parameters: Dict[str, Any]
     ) -> ExternalMCPServerResult:
-        """Call a tool on an external MCP server"""
+        """Call a tool on an external MCP server with HoneyHive monitoring"""
+        session_id = None
+        start_time = datetime.now(timezone.utc)
+        
+        if self.honeyhive_service:
+            session_id = self.honeyhive_service.create_session_id(f"mcp-{server_name}")
         
         if server_name not in self.servers:
+            error_msg = f"Server '{server_name}' not configured"
+            
+            # Log error to HoneyHive
+            if self.honeyhive_service and session_id:
+                self.honeyhive_service.log_external_mcp_call(
+                    session_id=session_id,
+                    server_name=server_name,
+                    tool_name=tool_name,
+                    inputs=parameters,
+                    outputs={},
+                    success=False,
+                    duration_ms=0,
+                    error_message=error_msg
+                )
+            
             return ExternalMCPServerResult(
                 success=False,
-                error=f"Server '{server_name}' not configured"
+                error=error_msg
             )
         
         server_url = self.servers[server_name]
@@ -77,25 +106,84 @@ class ExternalMCPClient:
                 headers={"Content-Type": "application/json"}
             )
             
+            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            
             if response.status_code == 200:
                 result_data = response.json()
+                
+                # Log successful call to HoneyHive
+                if self.honeyhive_service and session_id:
+                    self.honeyhive_service.log_external_mcp_call(
+                        session_id=session_id,
+                        server_name=server_name,
+                        tool_name=tool_name,
+                        inputs=parameters,
+                        outputs=result_data,
+                        success=True,
+                        duration_ms=duration_ms,
+                        metadata={
+                            "server_url": server_url,
+                            "status_code": response.status_code
+                        }
+                    )
+                
                 return ExternalMCPServerResult(
                     success=True,
                     result=result_data,
                     server_url=server_url
                 )
             else:
+                error_msg = f"Server returned {response.status_code}: {response.text}"
+                
+                # Log error to HoneyHive
+                if self.honeyhive_service and session_id:
+                    self.honeyhive_service.log_external_mcp_call(
+                        session_id=session_id,
+                        server_name=server_name,
+                        tool_name=tool_name,
+                        inputs=parameters,
+                        outputs={},
+                        success=False,
+                        duration_ms=duration_ms,
+                        error_message=error_msg,
+                        metadata={
+                            "server_url": server_url,
+                            "status_code": response.status_code
+                        }
+                    )
+                
                 return ExternalMCPServerResult(
                     success=False,
-                    error=f"Server returned {response.status_code}: {response.text}",
+                    error=error_msg,
                     server_url=server_url
                 )
                 
         except Exception as e:
+            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            error_msg = str(e)
+            
             logger.error(f"Error calling external MCP server {server_name}: {e}")
+            
+            # Log exception to HoneyHive
+            if self.honeyhive_service and session_id:
+                self.honeyhive_service.log_external_mcp_call(
+                    session_id=session_id,
+                    server_name=server_name,
+                    tool_name=tool_name,
+                    inputs=parameters,
+                    outputs={},
+                    success=False,
+                    duration_ms=duration_ms,
+                    error_message=error_msg,
+                    metadata={
+                        "server_url": server_url,
+                        "exception_type": type(e).__name__
+                    }
+                )
+            
             return ExternalMCPServerResult(
                 success=False,
-                error=str(e),
+                error=error_msg,
                 server_url=server_url
             )
     

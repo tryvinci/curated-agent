@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     llama_index_enabled: bool = True
     llama_index_storage_dir: str = "./data/index_storage"
     
+    # HoneyHive settings
+    honeyhive_enabled: bool = True
+    honeyhive_api_key: Optional[str] = None
+    honeyhive_project_id: Optional[str] = None
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

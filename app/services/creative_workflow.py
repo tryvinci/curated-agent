@@ -25,6 +25,12 @@ try:
 except ImportError:
     EXTERNAL_MCP_AVAILABLE = False
 
+try:
+    from app.services.honeyhive_service import get_honeyhive_service, honeyhive_monitor
+    HONEYHIVE_AVAILABLE = True
+except ImportError:
+    HONEYHIVE_AVAILABLE = False
+
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
@@ -47,6 +53,7 @@ class CreativeWorkflowService:
         self.mcp_service = get_mcp_integration() if MCP_AVAILABLE else None
         self.llama_index_service = get_llama_index_service() if LLAMA_INDEX_AVAILABLE else None
         self.external_mcp_client = None
+        self.honeyhive_service = get_honeyhive_service() if HONEYHIVE_AVAILABLE else None
         
         # Set up enhanced tools
         self._setup_enhanced_tools()
@@ -312,7 +319,12 @@ class CreativeWorkflowService:
         project_context: Optional[str] = None,
         requirements: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Execute the complete creative workflow"""
+        """Execute the complete creative workflow with HoneyHive monitoring"""
+        session_id = None
+        start_time = datetime.now(timezone.utc)
+        
+        if self.honeyhive_service:
+            session_id = self.honeyhive_service.create_session_id("creative-workflow")
         
         try:
             logger.info(f"Starting creative workflow for task: {task_description}")
@@ -332,19 +344,77 @@ class CreativeWorkflowService:
             
             result = crew.kickoff()
             
+            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            
+            # Log workflow execution to HoneyHive
+            if self.honeyhive_service and session_id:
+                self.honeyhive_service.log_workflow_execution(
+                    session_id=session_id,
+                    workflow_name="creative_workflow",
+                    task_description=task_description,
+                    agent_results=[
+                        {
+                            "agent": "creative_director",
+                            "role": "Strategic planning and oversight"
+                        },
+                        {
+                            "agent": "content_creator", 
+                            "role": "Content generation and creativity"
+                        },
+                        {
+                            "agent": "quality_reviewer",
+                            "role": "Quality assurance and refinement"
+                        }
+                    ],
+                    final_result=str(result),
+                    success=True,
+                    metadata={
+                        "task_count": len(tasks),
+                        "agent_count": len(agents),
+                        "project_context": project_context or "",
+                        "requirements": requirements or {}
+                    },
+                    duration_ms=duration_ms
+                )
+            
             logger.info("Creative workflow completed successfully")
             
             return {
                 "success": True,
                 "result": str(result),
                 "task_count": len(tasks),
-                "agent_count": len(agents)
+                "agent_count": len(agents),
+                "session_id": session_id,
+                "duration_ms": duration_ms
             }
             
         except Exception as e:
+            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            error_message = str(e)
+            
+            # Log workflow failure to HoneyHive
+            if self.honeyhive_service and session_id:
+                self.honeyhive_service.log_workflow_execution(
+                    session_id=session_id,
+                    workflow_name="creative_workflow",
+                    task_description=task_description,
+                    agent_results=[],
+                    final_result="",
+                    success=False,
+                    metadata={
+                        "error": error_message,
+                        "project_context": project_context or "",
+                        "requirements": requirements or {}
+                    },
+                    duration_ms=duration_ms,
+                    error_message=error_message
+                )
+            
             logger.error(f"Error executing creative workflow: {str(e)}")
             return {
                 "success": False,
                 "error": str(e),
-                "result": None
+                "result": None,
+                "session_id": session_id,
+                "duration_ms": duration_ms
             }
