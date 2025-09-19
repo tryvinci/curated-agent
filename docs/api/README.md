@@ -358,7 +358,7 @@ List MCP tools available in LlamaIndex integration.
 }
 ```
 
-## MCP Tools API
+### MCP Tools API
 
 ### List Available Tools
 
@@ -440,6 +440,179 @@ Execute an MCP tool with given parameters.
     "message": "Document processed successfully"
   },
   "error": null
+}
+```
+
+## Agent MCP Tools API
+
+The Agent MCP Tools API provides the same MCP functionality at agent-specific endpoints for better integration with AI agents and automated systems.
+
+### List Available Agent Tools
+
+**GET** `/agent/mcp/tools`
+
+List all available MCP tools for agent use.
+
+**Response:**
+```json
+{
+  "success": true,
+  "tools": [
+    {
+      "name": "process_document",
+      "description": "Process a document and extract information"
+    }
+  ],
+  "count": 1,
+  "endpoint": "/agent/mcp",
+  "description": "MCP tools available for agent use"
+}
+```
+
+### Get Agent Tool Information
+
+**GET** `/agent/mcp/tools/{tool_name}`
+
+Get detailed information about a specific agent MCP tool.
+
+### Execute Agent Tool
+
+**POST** `/agent/mcp/tools/execute`
+
+Execute an MCP tool through the agent interface.
+
+**Request Body:**
+```json
+{
+  "tool_name": "process_document",
+  "parameters": {
+    "path": "/path/to/document.pdf",
+    "extract_text": true
+  }
+}
+```
+
+### Get Agent Capabilities
+
+**GET** `/agent/mcp/capabilities`
+
+Get comprehensive information about agent MCP capabilities and available tool categories.
+
+**Response:**
+```json
+{
+  "success": true,
+  "capabilities": {
+    "mcp_tools": {
+      "available": true,
+      "count": 5,
+      "categories": {
+        "document_processing": ["process_document", "extract_text"],
+        "search_retrieval": ["search_knowledge", "query_documents"],
+        "generation": ["generate_content", "create_summary"]
+      }
+    },
+    "document_processing": {
+      "available": true,
+      "features": ["semantic_search", "document_ingestion", "knowledge_retrieval"]
+    },
+    "agent_integration": {
+      "available": true,
+      "features": ["tool_execution", "workflow_integration", "session_tracking"]
+    }
+  },
+  "endpoint": "/agent/mcp"
+}
+```
+
+### Execute Agent Workflow
+
+**POST** `/agent/mcp/execute-workflow`
+
+Execute multiple tools in sequence as a workflow.
+
+**Request Body:**
+```json
+{
+  "tools": [
+    {
+      "name": "search_knowledge",
+      "parameters": {"query": "sustainable technology"}
+    },
+    {
+      "name": "generate_content", 
+      "parameters": {"prompt": "Create summary from search results"}
+    }
+  ],
+  "context": {
+    "session_id": "workflow-123",
+    "user_id": "user_456"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "workflow_results": [
+    {
+      "tool_name": "search_knowledge",
+      "success": true,
+      "result": {"documents": ["doc1", "doc2"]},
+      "error": null
+    },
+    {
+      "tool_name": "generate_content",
+      "success": true, 
+      "result": {"content": "Generated summary..."},
+      "error": null
+    }
+  ],
+  "summary": {
+    "total_tools": 2,
+    "successful_tools": 2,
+    "failed_tools": 0
+  }
+}
+```
+
+### Agent MCP Health
+
+**GET** `/agent/mcp/health`
+
+Check the health of MCP integration for agent use.
+
+**Response:**
+```json
+{
+  "success": true,
+  "status": "healthy",
+  "available_tools": 5,
+  "mcp_integration": "active",
+  "endpoint": "/agent/mcp"
+}
+```
+
+### Agent MCP Information
+
+**GET** `/agent/mcp/`
+
+Get information about the agent MCP endpoint and available operations.
+
+**Response:**
+```json
+{
+  "success": true,
+  "endpoint": "/agent/mcp",
+  "description": "Agent MCP tools interface", 
+  "available_endpoints": [
+    "GET /agent/mcp/tools - List all available MCP tools",
+    "GET /agent/mcp/tools/{tool_name} - Get tool information",
+    "POST /agent/mcp/tools/execute - Execute a tool",
+    "GET /agent/mcp/ - This information endpoint"
+  ],
+  "note": "This endpoint provides the same MCP functionality as /api/v1/mcp but at the agent-specific path"
 }
 ```
 
