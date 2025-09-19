@@ -64,6 +64,8 @@ def call_external_api(
         with httpx.Client(timeout=timeout) as client:
             response = client.post(api_url, headers=headers, json=payload)
         
+        logger.info(f"API response for job {job_id}: status_code={response.status_code} body='{response.text}'")
+
         # Process the response
         result = {
             "success": response.is_success,
